@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "mkdirp": "^2.1.5",
     "nodejs-mobile-gyp": "^0.3.1",
     "nodejs-mobile-react-native": "^16.17.6"
   }
