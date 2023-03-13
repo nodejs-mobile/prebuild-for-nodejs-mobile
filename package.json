@@ -1,0 +1,16 @@
+{
+  "name": "prebuild-for-nodejs-mobile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": "bin.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "nodejs-mobile-gyp": "^0.3.1",
+    "nodejs-mobile-react-native": "^16.17.6"
+  }
+}
