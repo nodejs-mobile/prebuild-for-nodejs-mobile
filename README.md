@@ -1,6 +1,6 @@
 # prebuild-for-nodejs-mobile
 
-> CLI tool to compile node.js native modules for mobile
+> CLI tool to compile native modules to work on [nodejs-mobile](https://github.com/nodejs-mobile/nodejs-mobile)
 
 ## Usage
 
