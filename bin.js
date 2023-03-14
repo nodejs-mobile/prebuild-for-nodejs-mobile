@@ -149,7 +149,7 @@ const mobileGyp = require.resolve('nodejs-mobile-gyp/bin/node-gyp.js');
     androidEnvs.LINK = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
   }
 
-  const rebuild = spawn('node', [mobileGyp, 'rebuild', '--napi', '--strip'], {
+  const rebuild = spawn('node', [mobileGyp, 'rebuild'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
