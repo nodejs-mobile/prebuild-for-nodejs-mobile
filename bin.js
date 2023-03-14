@@ -23,7 +23,27 @@ async function readableToArray(readable) {
 
 const target = process.argv[2];
 const verbose = process.argv.includes('--verbose');
-const androidSdkVer = 21; // TODO: this should be CLI-configurable
+const androidSdkVer = process.argv.includes('--sdk31')
+  ? 31
+  : process.argv.includes('--sdk30')
+  ? 30
+  : process.argv.includes('--sdk29')
+  ? 29
+  : process.argv.includes('--sdk28')
+  ? 28
+  : process.argv.includes('--sdk27')
+  ? 27
+  : process.argv.includes('--sdk26')
+  ? 26
+  : process.argv.includes('--sdk25')
+  ? 25
+  : process.argv.includes('--sdk24')
+  ? 24
+  : process.argv.includes('--sdk23')
+  ? 23
+  : process.argv.includes('--sdk22')
+  ? 22
+  : 21; // TODO make this less ugly :)
 
 const VALID_TARGETS = [
   'ios-arm64',

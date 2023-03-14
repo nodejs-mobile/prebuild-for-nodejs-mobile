@@ -28,12 +28,18 @@ Use `--verbose` to see the whole compilation logs:
 $ npx prebuild-for-nodejs-mobile ios-arm64 --verbose
 ```
 
+For Android, you can specify the Android SDK version with `--sdkXX`, otherwise by default it will be `21`, the lowest supported.
+
+```sh
+$ npx prebuild-for-nodejs-mobile android-arm64 --sdk28
+```
+
 ## Features
 
 - [x] Compiles native modules for iOS
 - [x] Compiles native modules for Android
+- [x] Can customize the Android SDK target API version
 - [ ] Compiles Rust (e.g. Neon) native modules
-- [ ] Can customize the Android SDK target API version
 - [ ] Can customize build flags
 
 ## License
