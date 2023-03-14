@@ -3,10 +3,14 @@ const util = require('util');
 const path = require('path');
 const fs = require('fs');
 const { mkdirp } = require('mkdirp');
-const exec = util.promisify(require('child_process').exec);
+const rimraf = require('rimraf')
+const { chunksToLinesAsync, chomp } = require('@rauschma/stringio');
+const spawn = require('child_process').spawn
+const p = require('util').promisify;
 
 const VALID_TARGETS = ['ios-arm64', 'ios-x64', 'android-armv8'];
 const target = process.argv[2];
+const verbose = process.argv.includes('--verbose');
 if (!target) {
   console.error(
     'ERROR: Must specify a target to prebuild-for-nodejs-mobile' +
@@ -33,15 +37,34 @@ const cargoBuildTarget =
 const nodejsMobileGypBinFile = require.resolve('nodejs-mobile-gyp/bin/node-gyp.js');
 const nodejsHeadersDir = path.resolve(path.dirname(require.resolve('nodejs-mobile-react-native')), 'ios', 'libnode');
 
-(async function main() {
-  await mkdirp(path.join(process.cwd(), 'prebuilds', target));
+async function echoReadable(readable) {
+  for await (const line of chunksToLinesAsync(readable)) {
+    console.log(chomp(line));
+  }
+}
 
-  const node = process.argv[0];
-  await exec(`${node} ${nodejsMobileGypBinFile} rebuild ` + 
-    `--target_arch=${arch} --target_platform=${platform} ` + 
-    `--napi --strip`, {
+async function readableToArray(readable) {
+  const arr = [];
+  for await (const line of chunksToLinesAsync(readable)) {
+    arr.push(chomp(line));
+  }
+  return arr;
+}
+
+(async function main() {
+  const buildOutputFolder = path.join(process.cwd(), 'build', 'Release');
+  const prebuildOutputFolder = path.join(process.cwd(), 'prebuilds', target);
+  await mkdirp(prebuildOutputFolder);
+
+  const rebuild = spawn('node', [
+    nodejsMobileGypBinFile,
+    'rebuild',
+    '--target_arch=' + arch,
+    '--target_platform=' + platform,
+    '--napi',
+    '--strip',
+  ], {
     cwd: process.cwd(),
-    maxBuffer: 32 * 1024 * 1024, // 32MB worth of logs in stdout
     env: {
       ...process.env,
       GYP_DEFINES: `OS=${platform}`,
@@ -51,11 +74,35 @@ const nodejsHeadersDir = path.resolve(path.dirname(require.resolve('nodejs-mobil
       npm_config_format: platform === 'ios' ? 'make-ios' : 'make-android',
       npm_config_arch: arch,
     }
-  });
+  })
 
-  // FIXME: native-prover.node needs to be generalized
-  fs.renameSync(
-    path.resolve(process.cwd(), 'build', 'Release', 'native-prover.node'), 
-    path.resolve(process.cwd(), 'prebuilds', target, 'node.napi.node')
-  );
+  let stdout, stderr;
+  if (verbose) {
+    await Promise.all([
+      echoReadable(rebuild.stdout),
+      echoReadable(rebuild.stderr)
+    ]);
+  } else {
+    [stdout, stderr] = await Promise.all([
+      readableToArray(rebuild.stdout),
+      readableToArray(rebuild.stderr)
+    ]);
+  }
+  try {
+    await p(rebuild.on.bind(rebuild))('close');
+  } catch (code) {
+    console.error('Exited with code ' + code);
+    for (const line of stderr) console.log(line)
+    process.exit(code)
+  }
+
+  for (const filename of fs.readdirSync(buildOutputFolder)) {
+    if (filename.endsWith('.node')) {
+      await rimraf(path.resolve(prebuildOutputFolder, filename));
+      fs.renameSync(
+        path.resolve(buildOutputFolder, filename),
+        path.resolve(prebuildOutputFolder, filename)
+      );
+    }
+  }
 })();
