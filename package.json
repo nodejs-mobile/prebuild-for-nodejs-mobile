@@ -1,6 +1,6 @@
 {
   "name": "prebuild-for-nodejs-mobile",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI tool to compile node.js native modules for mobile",
   "bin": "bin.js",
   "author": "Andre 'Staltz' Medeiros <contact@staltz.com>",
