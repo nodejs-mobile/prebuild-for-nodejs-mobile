@@ -173,13 +173,13 @@ function buildGypModule(cwd) {
   return spawn('node', [mobileGyp, 'rebuild'], {
     cwd,
     env: {
-      ...process.env,
       GYP_DEFINES,
       npm_config_nodedir: nodeMobileHeaders,
       npm_config_platform: platform,
       npm_config_format: platform === 'ios' ? 'make-ios' : 'make-android',
       npm_config_arch: arch,
       ...androidEnvs,
+      ...process.env,
     },
   });
 }
@@ -258,6 +258,7 @@ function buildNeonModule(cwd) {
       npm_config_platform: platform,
       npm_config_arch: arch,
       ...androidEnvs,
+      ...process.env,
     },
   });
 }
