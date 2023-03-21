@@ -39,7 +39,7 @@ $ npx prebuild-for-nodejs-mobile android-arm64 --sdk28
 - [x] Compiles native modules for iOS
 - [x] Compiles native modules for Android
 - [x] Can customize the Android SDK target API version
-- [ ] Compiles Rust (e.g. Neon) native modules
+- [x] Compiles Rust (specifically [Neon](https://neon-bindings.com)) Node.js native modules
 - [ ] Can customize build flags
 
 ## License
