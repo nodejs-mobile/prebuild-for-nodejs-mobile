@@ -254,8 +254,9 @@ function buildNeonModule(cwd) {
   return spawn('npm', ['run', 'install'], {
     cwd,
     env: {
-      ...process.env,
       CARGO_BUILD_TARGET: cargoBuildTarget,
+      npm_config_platform: platform,
+      npm_config_arch: arch,
       ...androidEnvs,
     },
   });
