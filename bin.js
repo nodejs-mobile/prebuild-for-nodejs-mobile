@@ -159,38 +159,25 @@ function fixNodeBindgenCopyError(cwd) {
   const pathToReleaseDir = path.join(cwd, 'target', triple, 'release');
   const pathToIndexNode = path.join(cwd, 'index.node');
 
-  if (platform === 'android') {
-    const soFiles = fs
-      .readdirSync(pathToReleaseDir)
-      .filter((f) => f.endsWith('.so'));
-    if (soFiles.length !== 1) {
-      console.error(
-        `ERROR: Could not find a single .so file in ${pathToReleaseDir}`,
-      );
-      process.exit(1);
-    }
-    const soFile = soFiles[0];
-    const pathToSOFile = path.join(pathToReleaseDir, soFile);
-    fs.renameSync(pathToSOFile, pathToIndexNode);
-  } else if (platform === 'ios') {
-    const dylibFiles = fs
-      .readdirSync(pathToReleaseDir)
-      .filter((f) => f.endsWith('.dylib'));
-    if (dylibFiles.length !== 1) {
-      console.error(
-        `ERROR: Could not find a single .dylib file in ${pathToReleaseDir}`,
-      );
-      process.exit(1);
-    }
-    const dylibFile = dylibFiles[0];
-    const pathToDylibFile = path.join(pathToReleaseDir, dylibFile);
-    fs.renameSync(pathToDylibFile, pathToIndexNode);
+  const ext = platform === 'android' ? '.so' : '.dylib';
+
+  const outputFiles = fs
+    .readdirSync(pathToReleaseDir)
+    .filter((f) => f.endsWith(ext));
+  if (outputFiles.length !== 1) {
+    console.error(
+      `ERROR: Could not find a single ${ext} file in ${pathToReleaseDir}`,
+    );
+    process.exit(1);
   }
+  const outputFile = outputFiles[0];
+  const pathToOutputFile = path.join(pathToReleaseDir, outputFile);
+  fs.renameSync(pathToOutputFile, pathToIndexNode);
 
   if (verbose) {
     console.log(
       `node-bindgen error workaround!\n` +
-        `Renamed ${pathToSOFile} to ${pathToIndexNode}`,
+        `Renamed ${pathToOutputFile} to ${pathToIndexNode}`,
     );
   }
 }
