@@ -442,7 +442,16 @@ async function moveRustOutput(cwd, dst) {
   }
   const dstIndexNode = path.resolve(dst, 'index.node');
   await rimraf(dstIndexNode);
-  fs.renameSync(srcIndexNode, dstIndexNode);
+  // Apply index.node/index hack for iOS, if necessary:
+  if (platform === 'ios' && fs.lstatSync(srcIndexNode).isFile()) {
+    await mkdirp(dstIndexNode);
+    fs.renameSync(
+      path.resolve(srcIndexNode, 'index'),
+      path.resolve(dstIndexNode, 'index'),
+    );
+  } else {
+    fs.renameSync(srcIndexNode, dstIndexNode);
+  }
   return [dstIndexNode.split(cwd + '/')[1]];
 }
 
