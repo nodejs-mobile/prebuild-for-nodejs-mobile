@@ -157,19 +157,36 @@ function isNodeBindgenCopyError(stderr) {
 function fixNodeBindgenCopyError(cwd) {
   const triple = getRustTriple();
   const pathToReleaseDir = path.join(cwd, 'target', triple, 'release');
-  const soFiles = fs
-    .readdirSync(pathToReleaseDir)
-    .filter((f) => f.endsWith('.so'));
-  if (soFiles.length !== 1) {
-    console.error(
-      `ERROR: Could not find a single .so file in ${pathToReleaseDir}`,
-    );
-    process.exit(1);
-  }
-  const soFile = soFiles[0];
-  const pathToSOFile = path.join(pathToReleaseDir, soFile);
   const pathToIndexNode = path.join(cwd, 'index.node');
-  fs.renameSync(pathToSOFile, pathToIndexNode);
+
+  if (platform === 'android') {
+    const soFiles = fs
+      .readdirSync(pathToReleaseDir)
+      .filter((f) => f.endsWith('.so'));
+    if (soFiles.length !== 1) {
+      console.error(
+        `ERROR: Could not find a single .so file in ${pathToReleaseDir}`,
+      );
+      process.exit(1);
+    }
+    const soFile = soFiles[0];
+    const pathToSOFile = path.join(pathToReleaseDir, soFile);
+    fs.renameSync(pathToSOFile, pathToIndexNode);
+  } else if (platform === 'ios') {
+    const dylibFiles = fs
+      .readdirSync(pathToReleaseDir)
+      .filter((f) => f.endsWith('.dylib'));
+    if (dylibFiles.length !== 1) {
+      console.error(
+        `ERROR: Could not find a single .dylib file in ${pathToReleaseDir}`,
+      );
+      process.exit(1);
+    }
+    const dylibFile = dylibFiles[0];
+    const pathToDylibFile = path.join(pathToReleaseDir, dylibFile);
+    fs.renameSync(pathToDylibFile, pathToIndexNode);
+  }
+
   if (verbose) {
     console.log(
       `node-bindgen error workaround!\n` +
