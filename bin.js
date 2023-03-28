@@ -258,9 +258,20 @@ async function moveGypOutput(cwd, dst) {
   const ready = [];
   for (const filename of fs.readdirSync(src)) {
     if (filename.endsWith('.node')) {
-      await rimraf(path.resolve(dst, filename));
-      fs.renameSync(path.resolve(src, filename), path.resolve(dst, filename));
-      ready.push(path.resolve(dst, filename).split(cwd + '/')[1]);
+      const srcFilename = path.resolve(src, filename);
+      const dstFilename = path.resolve(dst, filename);
+      await rimraf(dstFilename);
+      // Apply index.node/index hack for iOS, if necessary:
+      if (platform === 'ios' && fs.lstatSync(srcFilename).isFile()) {
+        await mkdirp(dstFilename);
+        fs.renameSync(
+          path.resolve(srcFilename, 'index'),
+          path.resolve(dstFilename, 'index'),
+        );
+      } else {
+        fs.renameSync(srcFilename, dstFilename);
+      }
+      ready.push(dstFilename.split(cwd + '/')[1]);
     }
   }
   return ready;
