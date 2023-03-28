@@ -265,7 +265,7 @@ async function moveGypOutput(cwd, dst) {
       if (platform === 'ios' && fs.lstatSync(srcFilename).isFile()) {
         await mkdirp(dstFilename);
         fs.renameSync(
-          path.resolve(srcFilename, 'index'),
+          path.resolve(srcFilename),
           path.resolve(dstFilename, 'index'),
         );
       } else {
@@ -446,7 +446,7 @@ async function moveRustOutput(cwd, dst) {
   if (platform === 'ios' && fs.lstatSync(srcIndexNode).isFile()) {
     await mkdirp(dstIndexNode);
     fs.renameSync(
-      path.resolve(srcIndexNode, 'index'),
+      path.resolve(srcIndexNode),
       path.resolve(dstIndexNode, 'index'),
     );
   } else {
