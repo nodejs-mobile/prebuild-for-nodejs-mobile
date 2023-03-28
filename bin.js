@@ -3,13 +3,16 @@ const path = require('path');
 const fs = require('fs');
 const {mkdirp} = require('mkdirp');
 const rimraf = require('rimraf');
+const TOML = require('@iarna/toml');
 const {chunksToLinesAsync, chomp} = require('@rauschma/stringio');
 const spawn = require('child_process').spawn;
 const p = require('util').promisify;
 
-async function echoReadable(readable) {
+async function echoReadable(readable, pushable) {
   for await (const line of chunksToLinesAsync(readable)) {
-    console.log(chomp(line));
+    const lineStr = chomp(line);
+    console.log(lineStr);
+    pushable?.push(lineStr);
   }
 }
 
@@ -92,7 +95,7 @@ function getPackageJSON(pathToModule) {
   return pkgJSON;
 }
 
-function isGypModule(cwd) {
+function isGypNodeAddon(cwd) {
   const pkgJSON = getPackageJSON(cwd);
   if (!pkgJSON || !pkgJSON.scripts) return false;
   if (!pkgJSON.scripts.install && !pkgJSON.scripts.rebuild) return false;
@@ -102,15 +105,77 @@ function isGypModule(cwd) {
   return true;
 }
 
-function isNeonModule(cwd) {
+function getRustTriple() {
+  return target === 'ios-arm64'
+    ? 'aarch64-apple-ios'
+    : target === 'ios-x64'
+    ? 'x86_64-apple-ios'
+    : target === 'android-arm'
+    ? 'arm-linux-androideabi'
+    : target === 'android-arm64'
+    ? 'aarch64-linux-android'
+    : target === 'android-x64'
+    ? 'x86_64-linux-android'
+    : '';
+}
+
+function isRustNodeAddon(cwd) {
   const pkgJSON = getPackageJSON(cwd);
-  if (!pkgJSON || !pkgJSON.scripts || !pkgJSON.scripts.install) return false;
+  if (!pkgJSON || !pkgJSON.scripts || !pkgJSON.scripts.install) return null;
 
   const pathToCargoTOML = path.join(cwd, 'Cargo.toml');
-  if (!fs.existsSync(pathToCargoTOML)) return false;
-  const cargoTOML = fs.readFileSync(pathToCargoTOML, {encoding: 'utf8'});
+  if (!fs.existsSync(pathToCargoTOML)) return null;
+  return fs.readFileSync(pathToCargoTOML, {encoding: 'utf8'});
+}
+
+function isNeonRustModule(cwd) {
+  const cargoTOML = isRustNodeAddon(cwd);
+  if (!cargoTOML) return false;
   if (!cargoTOML.includes('neon')) return false;
   return true;
+}
+
+function isNodeBindgenRustModule(cwd) {
+  const cargoTOML = isRustNodeAddon(cwd);
+  if (!cargoTOML) return false;
+  if (!cargoTOML.includes('node-bindgen')) return false;
+  return true;
+}
+
+/**
+ * @param {Array<string>} stderr
+ */
+function isNodeBindgenCopyError(stderr) {
+  return stderr.some((line) =>
+    line.includes(`thread 'main' panicked at 'copy failed of "`),
+  );
+}
+
+// Move ${cwd}/target/${triple}/release/*.so to ./index.node
+// because nj-cli doesn't do this for us in the case of mobile targets
+// https://github.com/infinyon/node-bindgen/blob/97357ba1beda7e027f40ffbbd529f653ea54781b/nj-cli/src/main.rs#L146-L165
+function fixNodeBindgenCopyError(cwd) {
+  const triple = getRustTriple();
+  const pathToReleaseDir = path.join(cwd, 'target', triple, 'release');
+  const soFiles = fs
+    .readdirSync(pathToReleaseDir)
+    .filter((f) => f.endsWith('.so'));
+  if (soFiles.length !== 1) {
+    console.error(
+      `ERROR: Could not find a single .so file in ${pathToReleaseDir}`,
+    );
+    process.exit(1);
+  }
+  const soFile = soFiles[0];
+  const pathToSOFile = path.join(pathToReleaseDir, soFile);
+  const pathToIndexNode = path.join(cwd, 'index.node');
+  fs.renameSync(pathToSOFile, pathToIndexNode);
+  if (verbose) {
+    console.log(
+      `node-bindgen error workaround!\n` +
+        `Renamed ${pathToSOFile} to ${pathToIndexNode}`,
+    );
+  }
 }
 
 function buildGypModule(cwd) {
@@ -197,21 +262,10 @@ async function moveGypOutput(cwd, dst) {
   return ready;
 }
 
-function buildNeonModule(cwd) {
-  const cargoBuildTarget =
-    target === 'ios-arm64'
-      ? 'aarch64-apple-ios'
-      : target === 'ios-x64'
-      ? 'x86_64-apple-ios'
-      : target === 'android-arm'
-      ? 'arm-linux-androideabi'
-      : target === 'android-arm64'
-      ? 'aarch64-linux-android'
-      : target === 'android-x64'
-      ? 'x86_64-linux-android'
-      : '';
+function buildRustModule(cwd) {
+  const triple = getRustTriple();
 
-  if (cargoBuildTarget === '') {
+  if (triple === '') {
     console.error('Unrecognized target for Rust compilation: ' + target);
     process.exit(1);
   }
@@ -223,16 +277,27 @@ function buildNeonModule(cwd) {
       process.exit(1);
     }
 
+    const nodeMobileBin = path.resolve(
+      path.dirname(require.resolve('nodejs-mobile-react-native')),
+      'android',
+      'libnode',
+      'bin',
+    );
+
     let compilerPrefix = '';
+    let ndkArch = '';
     switch (arch) {
       case 'arm':
         compilerPrefix = `armv7a-linux-androideabi${androidSdkVer}`;
+        ndkArch = 'armeabi-v7a';
         break;
       case 'arm64':
         compilerPrefix = `aarch64-linux-android${androidSdkVer}`;
+        ndkArch = 'arm64-v8a';
         break;
       case 'x64':
         compilerPrefix = `x86_64-linux-android${androidSdkVer}`;
+        ndkArch = 'x86_64';
         break;
     }
 
@@ -244,17 +309,76 @@ function buildNeonModule(cwd) {
     }
     const toolchainPath = `${process.env.ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${hostTag}`;
 
-    const CBT = cargoBuildTarget.toUpperCase().replace(/-/g, '_');
-    const androidAR = `${toolchainPath}/bin/llvm-ar`;
-    const androidLinker = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
-    androidEnvs[`CARGO_TARGET_${CBT}_AR`] = androidAR;
-    androidEnvs[`CARGO_TARGET_${CBT}_LINKER`] = androidLinker;
+    const TRIPLE = triple.toUpperCase().replace(/-/g, '_');
+    const llvmAR = `${toolchainPath}/bin/llvm-ar`;
+    const clang = `${toolchainPath}/bin/${compilerPrefix}-clang`;
+    const clangXX = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
+
+    // Set environment variables
+    androidEnvs[`CARGO_TARGET_${TRIPLE}_LINKER`] = clangXX;
+    androidEnvs['CC'] = clang;
+    androidEnvs['CXX'] = clangXX;
+    androidEnvs['AR'] = llvmAR;
+
+    // Patch cwd to have empty build.rs file
+    // This is necessary for Cargo.toml `links = "node"` to work
+    const buildRsPath = path.join(cwd, 'build.rs');
+    if (!fs.existsSync(buildRsPath)) {
+      console.log('Creating empty build.rs file');
+      fs.closeSync(fs.openSync(buildRsPath, 'w'));
+      fs.closeSync(fs.openSync(buildRsPath + '.deleteme', 'w'));
+    }
+
+    // Patch Cargo.toml file to have `links = "node"`
+    // This is necessary for .cargo/config.toml patches to work
+    const cargoTomlPath = path.join(cwd, 'Cargo.toml');
+    if (!fs.existsSync(cargoTomlPath)) {
+      console.error('Cargo.toml file not found');
+      process.exit(1);
+    }
+    fs.copyFileSync(cargoTomlPath, cargoTomlPath + '.bak');
+    const cargoTomlStr = fs.readFileSync(cargoTomlPath, 'utf8') + '\n';
+    const cargoToml = TOML.parse(cargoTomlStr);
+    if (cargoToml.package.links) {
+      console.error('Cargo.toml file already has a `links` field');
+      process.exit(1);
+    }
+    console.log('Patching Cargo.toml file to have `links = "node"`');
+    cargoToml.package.links = 'node';
+    fs.writeFileSync(cargoTomlPath, TOML.stringify(cargoToml));
+
+    // Patch .cargo/config.toml file to link `node` as nodejs-mobile
+    const dotCargoPath = path.join(cwd, '.cargo');
+    const configTomlPath = path.join(dotCargoPath, 'config.toml');
+    if (!fs.existsSync(dotCargoPath)) {
+      fs.mkdirSync(dotCargoPath);
+    }
+    let existingConfig = '';
+    if (fs.existsSync(configTomlPath)) {
+      existingConfig = fs.readFileSync(configTomlPath, 'utf8') + '\n';
+      fs.copyFileSync(configTomlPath, configTomlPath + '.bak');
+    }
+    fs.writeFileSync(
+      configTomlPath,
+      existingConfig +
+        [
+          `[target.${triple}.node]`,
+          `rustc-link-search = ["${nodeMobileBin}/${ndkArch}"]`,
+          `rustc-link-lib = ["node"]`,
+        ].join('\n'),
+    );
+    if (verbose) {
+      console.log('Patched .cargo/config.toml file with:\n```');
+      console.log(fs.readFileSync(configTomlPath, 'utf8'));
+      console.log('```');
+    }
   }
 
   return spawn('npm', ['run', 'install'], {
     cwd,
     env: {
-      CARGO_BUILD_TARGET: cargoBuildTarget,
+      CARGO_BUILD_TARGET: triple,
+      CARGO_TERM_VERBOSE: 'true',
       npm_config_platform: platform,
       npm_config_arch: arch,
       ...androidEnvs,
@@ -263,13 +387,74 @@ function buildNeonModule(cwd) {
   });
 }
 
-async function moveNeonOutput(cwd, dst) {
-  const srcIndexNode = path.join(cwd, 'index.node');
+function undoRustPatches(cwd) {
+  // Undo Cargo.toml patch
+  const cargoTomlPath = path.join(cwd, 'Cargo.toml');
+  if (fs.existsSync(cargoTomlPath + '.bak')) {
+    fs.unlinkSync(cargoTomlPath);
+    fs.copyFileSync(cargoTomlPath + '.bak', cargoTomlPath);
+    fs.unlinkSync(cargoTomlPath + '.bak');
+  }
+
+  // Undo empty build.rs patch
+  const buildRsPath = path.join(cwd, 'build.rs');
+  if (fs.existsSync(buildRsPath + '.deleteme')) {
+    fs.unlinkSync(buildRsPath);
+    fs.unlinkSync(buildRsPath + '.deleteme');
+  }
+
+  // Undo .cargo/config.toml patch
+  const dotCargoPath = path.join(cwd, '.cargo');
+  if (!fs.existsSync(dotCargoPath)) return;
+  const configTomlPath = path.join(dotCargoPath, 'config.toml');
+  const configTomlBakPath = configTomlPath + '.bak';
+  if (fs.existsSync(configTomlPath)) {
+    fs.unlinkSync(configTomlPath);
+  }
+  if (fs.existsSync(configTomlBakPath)) {
+    fs.copyFileSync(configTomlBakPath, configTomlPath);
+  }
+  if (fs.readdirSync(path.join(cwd, '.cargo')).length === 0) {
+    fs.rmdirSync(path.join(cwd, '.cargo'));
+  }
+}
+
+async function moveRustOutput(cwd, dst) {
+  let srcIndexNode = path.join(cwd, 'index.node'); // Neon output
+  if (!fs.existsSync(srcIndexNode)) {
+    srcIndexNode = path.join(cwd, 'dist', 'index.node'); // node-bindgen output
+    if (!fs.existsSync(srcIndexNode)) return [];
+  }
   const dstIndexNode = path.resolve(dst, 'index.node');
-  if (!fs.existsSync(srcIndexNode)) return [];
   await rimraf(dstIndexNode);
   fs.renameSync(srcIndexNode, dstIndexNode);
   return [dstIndexNode.split(cwd + '/')[1]];
+}
+
+async function waitForCompilationTask(type, taskFn, cwd) {
+  const task = taskFn(cwd);
+  let stderr = [];
+  if (verbose) {
+    await Promise.all([
+      echoReadable(task.stdout),
+      echoReadable(task.stderr, stderr),
+    ]);
+  } else {
+    stderr = await readableToArray(task.stderr);
+  }
+  try {
+    await p(task.on.bind(task))('close');
+  } catch (code) {
+    if (type === 'rust-node-bindgen' && isNodeBindgenCopyError(stderr)) {
+      fixNodeBindgenCopyError(cwd);
+      return 0;
+    }
+
+    console.error('Exited with code ' + code);
+    for (const line of stderr) console.log(line);
+    return code;
+  }
+  return 0;
 }
 
 (async function main() {
@@ -277,42 +462,39 @@ async function moveNeonOutput(cwd, dst) {
   const cwd = process.cwd();
   let task;
   let type = 'unknown';
-  if (isGypModule(cwd)) {
-    task = buildGypModule(cwd);
+  if (isGypNodeAddon(cwd)) {
+    task = buildGypModule;
     type = 'gyp';
-  } else if (isNeonModule(cwd)) {
-    task = buildNeonModule(cwd);
-    type = 'neon';
+  } else if (isNeonRustModule(cwd)) {
+    task = buildRustModule;
+    type = 'rust-neon';
+  } else if (isNodeBindgenRustModule(cwd)) {
+    task = buildRustModule;
+    type = 'rust-node-bindgen';
   } else {
-    console.error('No native module (GYP or Neon) found in this folder');
+    console.error('No native module (GYP or Rust) found in this folder');
     process.exit(1);
   }
 
-  // Wait for compilation to finish
-  let stderr = [];
-  if (verbose) {
-    await Promise.all([echoReadable(task.stdout), echoReadable(task.stderr)]);
-  } else {
-    stderr = await readableToArray(task.stderr);
-  }
-  try {
-    await p(task.on.bind(task))('close');
-  } catch (code) {
-    console.error('Exited with code ' + code);
-    for (const line of stderr) console.log(line);
-    process.exit(code);
+  const code = await waitForCompilationTask(type, task, cwd);
+
+  // Post-processing regardless of failure or success
+  if (type.startsWith('rust')) undoRustPatches(cwd);
+
+  // If success, move outputs to prebuilds folder
+  if (code === 0) {
+    const prebuildOutputFolder = path.join(cwd, 'prebuilds', target);
+    await mkdirp(prebuildOutputFolder);
+    let ready = [];
+    if (type === 'gyp') {
+      ready = await moveGypOutput(cwd, prebuildOutputFolder);
+    } else if (type.startsWith('rust')) {
+      ready = await moveRustOutput(cwd, prebuildOutputFolder);
+    }
+    for (const filename of ready) {
+      console.log('BUILT ' + filename);
+    }
   }
 
-  // Move outputs to prebuilds folder
-  const prebuildOutputFolder = path.join(cwd, 'prebuilds', target);
-  await mkdirp(prebuildOutputFolder);
-  let ready = [];
-  if (type === 'gyp') {
-    ready = await moveGypOutput(cwd, prebuildOutputFolder);
-  } else if (type === 'neon') {
-    ready = await moveNeonOutput(cwd, prebuildOutputFolder);
-  }
-  for (const filename of ready) {
-    console.log('BUILT ' + filename);
-  }
+  process.exit(code);
 })();

@@ -6,6 +6,7 @@
   "author": "Andre 'Staltz' Medeiros <contact@staltz.com>",
   "license": "MIT",
   "dependencies": {
+    "@iarna/toml": "2.2.5",
     "@rauschma/stringio": "^1.4.0",
     "mkdirp": "^2.1.5",
     "nodejs-mobile-gyp": "^0.3.1",
