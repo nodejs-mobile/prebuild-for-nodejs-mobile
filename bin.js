@@ -5,7 +5,7 @@ const {mkdirp} = require('mkdirp');
 const rimraf = require('rimraf');
 const TOML = require('@iarna/toml');
 const {chunksToLinesAsync, chomp} = require('@rauschma/stringio');
-const spawn = require('child_process').spawn;
+const {spawn, exec} = require('child_process');
 const p = require('util').promisify;
 
 async function echoReadable(readable, pushable) {
@@ -29,25 +29,26 @@ const verbose = process.argv.includes('--verbose');
 const androidSdkVer = process.argv.includes('--sdk31')
   ? 31
   : process.argv.includes('--sdk30')
-  ? 30
-  : process.argv.includes('--sdk29')
-  ? 29
-  : process.argv.includes('--sdk28')
-  ? 28
-  : process.argv.includes('--sdk27')
-  ? 27
-  : process.argv.includes('--sdk26')
-  ? 26
-  : process.argv.includes('--sdk25')
-  ? 25
-  : process.argv.includes('--sdk24')
-  ? 24
-  : process.argv.includes('--sdk23')
-  ? 23
-  : process.argv.includes('--sdk22')
-  ? 22
-  : 21; // TODO make this less ugly :)
+    ? 30
+    : process.argv.includes('--sdk29')
+      ? 29
+      : process.argv.includes('--sdk28')
+        ? 28
+        : process.argv.includes('--sdk27')
+          ? 27
+          : process.argv.includes('--sdk26')
+            ? 26
+            : process.argv.includes('--sdk25')
+              ? 25
+              : process.argv.includes('--sdk24')
+                ? 24
+                : process.argv.includes('--sdk23')
+                  ? 23
+                  : process.argv.includes('--sdk22')
+                    ? 22
+                    : 21; // TODO make this less ugly :)
 
+const VALID_MIN_IOS_VERSION = '11.0' // This is hard-coded in nodejs-mobile
 const VALID_TARGETS = [
   'ios-arm64',
   'ios-x64',
@@ -59,16 +60,16 @@ const listedTargets = VALID_TARGETS.map((t) => `  * ${t}`).join('\n');
 if (!target) {
   console.error(
     'ERROR: Must specify a target to prebuild-for-nodejs-mobile' +
-      ', one of these:\n' +
-      listedTargets,
+    ', one of these:\n' +
+    listedTargets,
   );
   process.exit(1);
 }
 if (!VALID_TARGETS.includes(target)) {
   console.error(
     `ERROR: Invalid target "${target}" specified to prebuild-for-nodejs-mobile` +
-      ', must be one of these:\n' +
-      listedTargets,
+    ', must be one of these:\n' +
+    listedTargets,
   );
   process.exit(1);
 }
@@ -78,7 +79,7 @@ const [platform, arch] = target.split('-');
 if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
   console.error(
     'ANDROID_NDK_HOME missing. Please call this tool again, ' +
-      'providing the ANDROID_NDK_HOME env var first',
+    'providing the ANDROID_NDK_HOME env var first',
   );
   process.exit(1);
 }
@@ -109,14 +110,14 @@ function getRustTriple() {
   return target === 'ios-arm64'
     ? 'aarch64-apple-ios'
     : target === 'ios-x64'
-    ? 'x86_64-apple-ios'
-    : target === 'android-arm'
-    ? 'arm-linux-androideabi'
-    : target === 'android-arm64'
-    ? 'aarch64-linux-android'
-    : target === 'android-x64'
-    ? 'x86_64-linux-android'
-    : '';
+      ? 'x86_64-apple-ios'
+      : target === 'android-arm'
+        ? 'arm-linux-androideabi'
+        : target === 'android-arm64'
+          ? 'aarch64-linux-android'
+          : target === 'android-x64'
+            ? 'x86_64-linux-android'
+            : '';
 }
 
 function isRustNodeAddon(cwd) {
@@ -177,7 +178,7 @@ function fixNodeBindgenCopyError(cwd) {
   if (verbose) {
     console.log(
       `node-bindgen error workaround!\n` +
-        `Renamed ${pathToOutputFile} to ${pathToIndexNode}`,
+      `Renamed ${pathToOutputFile} to ${pathToIndexNode}`,
     );
   }
 }
@@ -251,6 +252,31 @@ function buildGypModule(cwd) {
       ...process.env,
     },
   });
+}
+
+async function hackIOSMinVersion(filename) {
+  const task1 = await p(exec)(`vtool -show ${filename}`)
+  const lines = task1.stdout.split('\n');
+  const sdkVersionLine = lines.find(line => line.includes('sdk '))
+  if (!sdkVersionLine) {
+    console.error('Faulty prebuild for iOS, missing SDK version in the Mach-O bundle')
+    process.exit(1)
+  }
+  const sdkVersion = sdkVersionLine.trim().split('sdk').map(x => x.trim())[1]
+  const currentMinVersionLine = lines.find(line => line.includes('minos'))
+  const currentMinVersion = currentMinVersionLine?.trim().split('minos').map(x => x.trim())[1] ?? '0.0'
+  if (currentMinVersion === VALID_MIN_IOS_VERSION) return
+  console.log(`Minimum iOS version supported is incorrect (${currentMinVersion}), ` + 
+    `patching it with "vtool" to become ${VALID_MIN_IOS_VERSION}`);
+  await p(exec)([
+    'vtool', 
+    '-set-version-min', 
+    'ios', 
+    VALID_MIN_IOS_VERSION, 
+    sdkVersion, 
+    `-output ${filename}`,
+    filename
+  ].join(' '));
 }
 
 async function moveGypOutput(cwd, dst) {
@@ -376,11 +402,11 @@ function buildRustModule(cwd) {
     fs.writeFileSync(
       configTomlPath,
       existingConfig +
-        [
-          `[target.${triple}.node]`,
-          `rustc-link-search = ["${nodeMobileBin}/${ndkArch}"]`,
-          `rustc-link-lib = ["node"]`,
-        ].join('\n'),
+      [
+        `[target.${triple}.node]`,
+        `rustc-link-search = ["${nodeMobileBin}/${ndkArch}"]`,
+        `rustc-link-lib = ["node"]`,
+      ].join('\n'),
     );
     if (verbose) {
       console.log('Patched .cargo/config.toml file with:\n```');
@@ -514,6 +540,12 @@ async function waitForCompilationTask(type, taskFn, cwd) {
       ready = await moveGypOutput(cwd, prebuildOutputFolder);
     } else if (type.startsWith('rust')) {
       ready = await moveRustOutput(cwd, prebuildOutputFolder);
+    }
+    if (platform === 'ios') {
+      for (const filename of ready) {
+        const fullFilename = path.resolve(cwd, filename, 'index')
+        await hackIOSMinVersion(fullFilename)
+      }
     }
     for (const filename of ready) {
       console.log('BUILT ' + filename);
