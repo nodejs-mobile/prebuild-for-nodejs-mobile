@@ -98,8 +98,13 @@ function getPackageJSON(pathToModule) {
 
 function isGypNodeAddon(cwd) {
   const pkgJSON = getPackageJSON(cwd);
-  if (!pkgJSON || !pkgJSON.scripts) return false;
-  if (!pkgJSON.scripts.install && !pkgJSON.scripts.rebuild) return false;
+  if (
+    !pkgJSON?.scripts?.install &&
+    !pkgJSON?.scripts?.rebuild &&
+    !pkgJSON?.gypfile
+  ) {
+    return false;
+  }
 
   const pathToBindingGYP = path.join(cwd, 'binding.gyp');
   if (!fs.existsSync(pathToBindingGYP)) return false;

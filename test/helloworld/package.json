@@ -1,0 +1,9 @@
+{
+  "main": "lib/binding.js",
+  "private": true,
+  "dependencies": {
+    "node-addon-api": "^1.1.0"
+  },
+  "gypfile": true,
+  "name": "helloworld"
+}
