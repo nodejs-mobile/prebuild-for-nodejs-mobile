@@ -12,6 +12,7 @@
     "@iarna/toml": "2.2.5",
     "@rauschma/stringio": "^1.4.0",
     "mkdirp": "^2.1.5",
+    "node-gyp-build-mobile": "4.6.0-3",
     "nodejs-mobile-gyp": "^0.3.1",
     "nodejs-mobile-react-native": "^16.17.6",
     "rimraf": "^4.4.0"

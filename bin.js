@@ -188,6 +188,48 @@ function fixNodeBindgenCopyError(cwd) {
   }
 }
 
+/**
+ * Since npm 7+, the environment variable npm_config_node_gyp (which we rely on
+ * in scripts/ios-build-native-modules.sh) has not been forwarded to package
+ * scripts, so here we patch each module's package.json to replace
+ * node-gyp-build with our fork, node-gyp-build-mobile. This fork reads a
+ * different environment variable, originally created in
+ * scripts/ios-build-native-modules.sh, pointing to node-mobile-gyp.
+ */
+function patchPackageJSONNodeGypBuild(cwd) {
+  const packageJSONPath = path.join(cwd, 'package.json');
+  const packageJSONReadData = fs.readFileSync(packageJSONPath);
+  let packageJSON;
+  try {
+    packageJSON = JSON.parse(packageJSONReadData);
+  } catch (err) {
+    console.error('patcher failed to parse ' + packageJSONPath);
+    process.exit(0);
+  }
+  if (!packageJSON) return false;
+  if (!packageJSON.scripts) return false;
+  if (!packageJSON.scripts.install) return false;
+  if (!packageJSON.scripts.install.includes('node-gyp-build')) return false;
+  packageJSON.scripts.install = packageJSON.scripts.install.replace(
+    /node-gyp-build(?!-)/g,
+    `${require.resolve('node-gyp-build-mobile/bin.js')}`,
+  );
+  const packageJSONWriteData = JSON.stringify(packageJSON, null, 2);
+  fs.renameSync(packageJSONPath, packageJSONPath + '.bak');
+  fs.writeFileSync(packageJSONPath, packageJSONWriteData);
+  return true;
+}
+
+function undoPackageJSONPatch(cwd) {
+  const packageJSONPath = path.join(cwd, 'package.json');
+  const packageJSONBackupPath = path.join(cwd, 'package.json.bak');
+  if (fs.existsSync(packageJSONBackupPath)) {
+    fs.unlinkSync(packageJSONPath);
+    fs.copyFileSync(packageJSONBackupPath, packageJSONPath);
+    fs.unlinkSync(packageJSONBackupPath);
+  }
+}
+
 function buildGypModule(cwd) {
   const nodeMobileHeaders = path.resolve(
     path.dirname(require.resolve('nodejs-mobile-react-native')),
@@ -245,18 +287,23 @@ function buildGypModule(cwd) {
 
   const mobileGyp = require.resolve('nodejs-mobile-gyp/bin/node-gyp.js');
 
-  return spawn('node', [mobileGyp, 'rebuild'], {
-    cwd,
-    env: {
-      GYP_DEFINES,
-      npm_config_nodedir: nodeMobileHeaders,
-      npm_config_platform: platform,
-      npm_config_format: platform === 'ios' ? 'make-ios' : 'make-android',
-      npm_config_arch: arch,
-      ...androidEnvs,
-      ...process.env,
-    },
-  });
+  const env = {
+    GYP_DEFINES,
+    NODEJS_MOBILE_GYP: mobileGyp,
+    npm_config_nodedir: nodeMobileHeaders,
+    npm_config_platform: platform,
+    npm_config_format: platform === 'ios' ? 'make-ios' : 'make-android',
+    npm_config_arch: arch,
+    ...androidEnvs,
+    ...process.env,
+  };
+
+  const patchedInstallScript = patchPackageJSONNodeGypBuild(cwd);
+  if (patchedInstallScript) {
+    return spawn('npm', ['run', 'install'], {cwd, env});
+  } else {
+    return spawn('node', [mobileGyp, 'rebuild'], {cwd, env});
+  }
 }
 
 async function hackIOSMinVersion(filename) {
@@ -555,6 +602,7 @@ async function waitForCompilationTask(type, taskFn, cwd) {
 
   // Post-processing regardless of failure or success
   if (type.startsWith('rust')) undoRustPatches(cwd);
+  if (type.startsWith('gyp')) undoPackageJSONPatch(cwd);
 
   // If success, move outputs to prebuilds folder
   if (code === 0) {
