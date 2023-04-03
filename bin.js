@@ -361,10 +361,11 @@ async function moveGypOutput(cwd, dst) {
       await rimraf(dstFilename);
       // Apply index.node/index hack for iOS, if necessary:
       if (platform === 'ios' && fs.lstatSync(srcFilename).isFile()) {
+        const inside = path.parse(path.basename(dstFilename)).name;
         await mkdirp(dstFilename);
         fs.renameSync(
           path.resolve(srcFilename),
-          path.resolve(dstFilename, 'index'),
+          path.resolve(dstFilename, inside),
         );
       } else {
         fs.renameSync(srcFilename, dstFilename);
@@ -616,7 +617,8 @@ async function waitForCompilationTask(type, taskFn, cwd) {
     }
     if (platform === 'ios') {
       for (const filename of ready) {
-        const fullFilename = path.resolve(cwd, filename, 'index');
+        const inside = path.parse(path.basename(filename)).name
+        const fullFilename = path.resolve(cwd, filename, inside);
         await hackIOSMinVersion(fullFilename);
       }
     }
