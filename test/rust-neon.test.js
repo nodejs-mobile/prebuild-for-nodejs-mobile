@@ -5,21 +5,21 @@ const path = require('path');
 const rimraf = require('rimraf');
 const fs = require('fs');
 
-tape('GYP-based native module for android-arm(v7)', async (t) => {
+tape('Rust-based (Neon) native module for android-arm(v7)', async (t) => {
   const prebuild4 = path.join(__dirname, '..', 'bin.js');
-  const project = path.join(__dirname, 'helloworld');
+  const project = path.join(__dirname, 'curve25519-scalarmult-neon');
   const target = 'android-arm';
 
   if (!fs.existsSync(path.join(project, 'node_modules'))) {
     await p(exec)('npm install', {cwd: project});
     t.pass('npm install');
-    await rimraf(path.join(project, 'build'));
+    await rimraf(path.join(project, 'target'));
   }
 
   const task1 = await p(exec)(`${prebuild4} ${target}`, {cwd: project});
   t.true(task1.stdout.includes('BUILT '), 'prebuild done');
 
-  const pathToOutput = path.join('prebuilds', target, 'helloworld.node');
+  const pathToOutput = path.join('prebuilds', target, 'index.node');
 
   const task2 = await p(exec)(`file ${pathToOutput}`, {cwd: project});
   t.true(
@@ -34,21 +34,21 @@ tape('GYP-based native module for android-arm(v7)', async (t) => {
   );
 });
 
-tape('GYP-based native module for android-arm64(v8)', async (t) => {
+tape('Rust-based (Neon) native module for android-arm64(v8)', async (t) => {
   const prebuild4 = path.join(__dirname, '..', 'bin.js');
-  const project = path.join(__dirname, 'helloworld');
+  const project = path.join(__dirname, 'curve25519-scalarmult-neon');
   const target = 'android-arm64';
 
   if (!fs.existsSync(path.join(project, 'node_modules'))) {
     await p(exec)('npm install', {cwd: project});
     t.pass('npm install');
-    await rimraf(path.join(project, 'build'));
+    await rimraf(path.join(project, 'target'));
   }
 
   const task1 = await p(exec)(`${prebuild4} ${target}`, {cwd: project});
   t.true(task1.stdout.includes('BUILT '), 'prebuild done');
 
-  const pathToOutput = path.join('prebuilds', target, 'helloworld.node');
+  const pathToOutput = path.join('prebuilds', target, 'index.node');
 
   const task2 = await p(exec)(`file ${pathToOutput}`, {cwd: project});
   t.true(
@@ -63,21 +63,21 @@ tape('GYP-based native module for android-arm64(v8)', async (t) => {
   );
 });
 
-tape('GYP-based native module for android-x64', async (t) => {
+tape('Rust-based (Neon) native module for android-x64', async (t) => {
   const prebuild4 = path.join(__dirname, '..', 'bin.js');
-  const project = path.join(__dirname, 'helloworld');
+  const project = path.join(__dirname, 'curve25519-scalarmult-neon');
   const target = 'android-x64';
 
   if (!fs.existsSync(path.join(project, 'node_modules'))) {
     await p(exec)('npm install', {cwd: project});
     t.pass('npm install');
-    await rimraf(path.join(project, 'build'));
+    await rimraf(path.join(project, 'target'));
   }
 
   const task1 = await p(exec)(`${prebuild4} ${target}`, {cwd: project});
   t.true(task1.stdout.includes('BUILT '), 'prebuild done');
 
-  const pathToOutput = path.join('prebuilds', target, 'helloworld.node');
+  const pathToOutput = path.join('prebuilds', target, 'index.node');
 
   const task2 = await p(exec)(`file ${pathToOutput}`, {cwd: project});
   t.true(

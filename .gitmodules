@@ -1,3 +1,9 @@
 [submodule "test/bufferutil"]
 	path = test/bufferutil
 	url = git@github.com:websockets/bufferutil.git
+[submodule "test/curve25519-scalarmult-neon"]
+	path = test/curve25519-scalarmult-neon
+	url = git@github.com:Railgun-Community/curve25519-scalarmult-neon.git
+[submodule "test/curve25519-scalarmult-rsjs"]
+	path = test/curve25519-scalarmult-rsjs
+	url = git@github.com:Railgun-Community/curve25519-scalarmult-rsjs.git
