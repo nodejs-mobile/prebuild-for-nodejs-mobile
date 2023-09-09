@@ -51,6 +51,7 @@ const androidSdkVer = process.argv.includes('--sdk31')
 const VALID_MIN_IOS_VERSION = '11.0'; // This is hard-coded in nodejs-mobile
 const VALID_TARGETS = [
   'ios-arm64',
+  'ios-arm64-simulator',
   'ios-x64',
   'android-arm',
   'android-arm64',
@@ -74,7 +75,9 @@ if (!VALID_TARGETS.includes(target)) {
   process.exit(1);
 }
 
-const [platform, arch] = target.split('-');
+const [platform, arch,_simulator] = target.split('-');
+
+const simulator = !!_simulator;
 
 if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
   console.error(
@@ -237,7 +240,7 @@ function buildGypModule(cwd) {
     'libnode',
   );
 
-  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch}`;
+  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch} simulator=${simulator}`;
 
   const androidEnvs = {};
   if (platform === 'android') {
