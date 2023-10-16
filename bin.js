@@ -75,9 +75,9 @@ if (!VALID_TARGETS.includes(target)) {
   process.exit(1);
 }
 
-const [platform, arch,_simulator] = target.split('-');
+const [platform, arch, simulatorTag] = target.split('-');
 
-const simulator = !!_simulator;
+const iossim = !!simulatorTag;
 
 if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
   console.error(
@@ -240,7 +240,7 @@ function buildGypModule(cwd) {
     'libnode',
   );
 
-  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch} simulator=${simulator}`;
+  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch} iossim=${iossim}`;
 
   const androidEnvs = {};
   if (platform === 'android') {
@@ -620,7 +620,7 @@ async function waitForCompilationTask(type, taskFn, cwd) {
     }
     if (platform === 'ios') {
       for (const filename of ready) {
-        const inside = path.parse(path.basename(filename)).name
+        const inside = path.parse(path.basename(filename)).name;
         const fullFilename = path.resolve(cwd, filename, inside);
         await hackIOSMinVersion(fullFilename);
       }
