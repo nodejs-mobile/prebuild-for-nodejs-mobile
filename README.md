@@ -9,6 +9,7 @@ Specify one of the supported targets:
 ```sh
 $ npx prebuild-for-nodejs-mobile
 ERROR: Must specify a target to prebuild-for-nodejs-mobile, one of these:
+  * ios-arm64-simulator
   * ios-arm64
   * ios-x64
   * android-arm
