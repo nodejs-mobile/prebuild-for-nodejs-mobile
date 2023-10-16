@@ -288,6 +288,7 @@ function buildGypModule(cwd) {
     androidEnvs.CC = `${toolchainPath}/bin/${compilerPrefix}-clang`;
     androidEnvs.CXX = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
     androidEnvs.LINK = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
+    androidEnvs.RANLIB = `${toolchainPath}/bin/llvm-ranlib`;
   }
 
   const mobileGyp = require.resolve('nodejs-mobile-gyp/bin/node-gyp.js');
