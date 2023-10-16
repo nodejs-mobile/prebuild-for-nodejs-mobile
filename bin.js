@@ -26,7 +26,13 @@ async function readableToArray(readable) {
 
 const target = process.argv[2];
 const verbose = process.argv.includes('--verbose');
-const androidSdkVer = process.argv.includes('--sdk31')
+const androidSdkVer = process.argv.includes('--sdk34')
+  ? 34
+  : process.argv.includes('--sdk33')
+  ? 33
+  : process.argv.includes('--sdk32')
+  ? 32
+  : process.argv.includes('--sdk31')
   ? 31
   : process.argv.includes('--sdk30')
   ? 30
@@ -42,13 +48,9 @@ const androidSdkVer = process.argv.includes('--sdk31')
   ? 25
   : process.argv.includes('--sdk24')
   ? 24
-  : process.argv.includes('--sdk23')
-  ? 23
-  : process.argv.includes('--sdk22')
-  ? 22
-  : 21; // TODO make this less ugly :)
+  : 24; // TODO make this less ugly :)
 
-const VALID_MIN_IOS_VERSION = '11.0'; // This is hard-coded in nodejs-mobile
+const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
 const VALID_TARGETS = [
   'ios-arm64',
   'ios-arm64-simulator',
