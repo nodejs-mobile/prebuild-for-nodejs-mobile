@@ -1,6 +1,6 @@
 {
   "name": "prebuild-for-nodejs-mobile",
-  "version": "18.17.1",
+  "version": "18.17.2",
   "description": "CLI tool to compile node.js native modules for mobile",
   "author": "Andre 'Staltz' Medeiros <contact@staltz.com>",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "mkdirp": "^2.1.5",
     "node-gyp-build-mobile": "4.6.0-3",
     "nodejs-mobile-gyp": "^0.3.1",
-    "nodejs-mobile-react-native": "^18.17.1",
+    "nodejs-mobile-react-native": "^18.17.2",
     "rimraf": "^4.4.0"
   },
   "devDependencies": {
