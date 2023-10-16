@@ -4,7 +4,7 @@
 
 ## Usage
 
-Specify one of the supported targets:
+`cd` into the folder that contains your native addon (folder containing the `package.json`) and then run `prebuild-for-nodejs-mobile`, specifying one of the supported targets:
 
 ```sh
 $ npx prebuild-for-nodejs-mobile
