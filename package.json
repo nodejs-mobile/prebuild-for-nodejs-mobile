@@ -14,7 +14,7 @@
     "mkdirp": "^2.1.5",
     "node-gyp-build-mobile": "4.6.0-3",
     "nodejs-mobile-gyp": "^0.3.1",
-    "nodejs-mobile-react-native": "^18.17.2",
+    "nodejs-mobile-react-native": "~18.17.3",
     "rimraf": "^4.4.0"
   },
   "devDependencies": {

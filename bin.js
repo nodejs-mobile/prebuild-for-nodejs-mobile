@@ -61,7 +61,14 @@ if (!VALID_TARGETS.includes(target)) {
   process.exit(1);
 }
 
-const [platform, arch, simulatorTag] = target.split('-');
+/** @type {'ios' | 'android'} */
+let platform;
+/** @type {'arm64' | 'arm' | 'x64'} */
+let arch;
+/** @type {string | undefined} */
+let simulatorTag;
+
+[platform, arch, simulatorTag] = /** @type {any} */ (target.split('-'));
 
 const iossim = !!simulatorTag;
 
@@ -317,7 +324,7 @@ function buildGypModule(cwd) {
     'libnode',
   );
 
-  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch} iossim=${iossim}`;
+  let GYP_DEFINES = `OS=${platform} target_platform=${platform} target_arch=${arch}`;
 
   const androidEnvs = {};
   if (platform === 'android') {
@@ -364,6 +371,10 @@ function buildGypModule(cwd) {
     androidEnvs.CXX = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
     androidEnvs.LINK = `${toolchainPath}/bin/${compilerPrefix}-clang++`;
     androidEnvs.RANLIB = `${toolchainPath}/bin/llvm-ranlib`;
+  }
+
+  if (platform === 'ios') {
+    GYP_DEFINES += ` iossim=${iossim}`;
   }
 
   const mobileGyp = require.resolve('nodejs-mobile-gyp/bin/node-gyp.js');
