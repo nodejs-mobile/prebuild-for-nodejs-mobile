@@ -8,6 +8,21 @@ const {chunksToLinesAsync, chomp} = require('@rauschma/stringio');
 const {spawn, exec} = require('child_process');
 const p = require('util').promisify;
 
+/**
+ * @typedef {'gyp' | 'rust-neon' | 'rust-node-bindgen'} AddonType
+ * @typedef {{
+ *   scripts?: {
+ *     install?: string;
+ *     rebuild?: string;
+ *   };
+ *   gypfile?: boolean;
+ * }} PackageJSON
+ */
+
+/**
+ * @param {import('stream').Readable} readable
+ * @param {Array<string>=} pushable
+ */
 async function echoReadable(readable, pushable) {
   for await (const line of chunksToLinesAsync(readable)) {
     const lineStr = chomp(line);
@@ -16,6 +31,10 @@ async function echoReadable(readable, pushable) {
   }
 }
 
+/**
+ * @param {import('stream').Readable} readable
+ * @returns {Promise<Array<string>>}
+ */
 async function readableToArray(readable) {
   const arr = [];
   for await (const line of chunksToLinesAsync(readable)) {
@@ -89,6 +108,10 @@ if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
   process.exit(1);
 }
 
+/**
+ * @param {string} pathToModule
+ * @returns {PackageJSON | null}
+ */
 function getPackageJSON(pathToModule) {
   const pathToPkgJSON = path.join(pathToModule, 'package.json');
   if (!fs.existsSync(pathToPkgJSON)) return null;
@@ -101,6 +124,10 @@ function getPackageJSON(pathToModule) {
   return pkgJSON;
 }
 
+/**
+ * @param {string} cwd
+ * @returns {boolean}
+ */
 function isGypNodeAddon(cwd) {
   const pkgJSON = getPackageJSON(cwd);
   if (
@@ -116,6 +143,9 @@ function isGypNodeAddon(cwd) {
   return true;
 }
 
+/**
+ * @returns {string}
+ */
 function getRustTriple() {
   return target === 'ios-arm64'
     ? 'aarch64-apple-ios'
@@ -130,7 +160,11 @@ function getRustTriple() {
     : '';
 }
 
-function isRustNodeAddon(cwd) {
+/**
+ * @param {string} cwd
+ * @returns {string | null}
+ */
+function getRustNodeAddonCargoTOML(cwd) {
   const pkgJSON = getPackageJSON(cwd);
   if (!pkgJSON || !pkgJSON.scripts || !pkgJSON.scripts.install) return null;
 
@@ -139,15 +173,23 @@ function isRustNodeAddon(cwd) {
   return fs.readFileSync(pathToCargoTOML, {encoding: 'utf8'});
 }
 
+/**
+ * @param {string} cwd
+ * @returns {boolean}
+ */
 function isNeonRustModule(cwd) {
-  const cargoTOML = isRustNodeAddon(cwd);
+  const cargoTOML = getRustNodeAddonCargoTOML(cwd);
   if (!cargoTOML) return false;
   if (!cargoTOML.includes('neon')) return false;
   return true;
 }
 
+/**
+ * @param {string} cwd
+ * @returns {boolean}
+ */
 function isNodeBindgenRustModule(cwd) {
-  const cargoTOML = isRustNodeAddon(cwd);
+  const cargoTOML = getRustNodeAddonCargoTOML(cwd);
   if (!cargoTOML) return false;
   if (!cargoTOML.includes('node-bindgen')) return false;
   return true;
@@ -162,9 +204,13 @@ function isNodeBindgenCopyError(stderr) {
   );
 }
 
-// Move ${cwd}/target/${triple}/release/*.so to ./index.node
-// because nj-cli doesn't do this for us in the case of mobile targets
-// https://github.com/infinyon/node-bindgen/blob/97357ba1beda7e027f40ffbbd529f653ea54781b/nj-cli/src/main.rs#L146-L165
+/**
+ * Moves ${cwd}/target/${triple}/release/*.so to ./index.node
+ * because nj-cli doesn't do this for us in the case of mobile targets
+ * https://github.com/infinyon/node-bindgen/blob/97357ba1beda7e027f40ffbbd529f653ea54781b/nj-cli/src/main.rs#L146-L165
+ *
+ * @param {string} cwd
+ */
 function fixNodeBindgenCopyError(cwd) {
   const triple = getRustTriple();
   const pathToReleaseDir = path.join(cwd, 'target', triple, 'release');
@@ -200,10 +246,12 @@ function fixNodeBindgenCopyError(cwd) {
  * node-gyp-build with our fork, node-gyp-build-mobile. This fork reads a
  * different environment variable, originally created in
  * scripts/ios-build-native-modules.sh, pointing to node-mobile-gyp.
+ *
+ * @param {string} cwd
  */
 function patchPackageJSONNodeGypBuild(cwd) {
   const packageJSONPath = path.join(cwd, 'package.json');
-  const packageJSONReadData = fs.readFileSync(packageJSONPath);
+  const packageJSONReadData = fs.readFileSync(packageJSONPath, 'utf-8');
   let packageJSON;
   try {
     packageJSON = JSON.parse(packageJSONReadData);
@@ -225,6 +273,9 @@ function patchPackageJSONNodeGypBuild(cwd) {
   return true;
 }
 
+/**
+ * @param {string} cwd
+ */
 function undoPackageJSONPatch(cwd) {
   const packageJSONPath = path.join(cwd, 'package.json');
   const packageJSONBackupPath = path.join(cwd, 'package.json.bak');
@@ -235,6 +286,10 @@ function undoPackageJSONPatch(cwd) {
   }
 }
 
+/**
+ * @param {string} cwd
+ * @returns {import('child_process').ChildProcess}
+ */
 function buildGypModule(cwd) {
   const nodeMobileHeaders = path.resolve(
     path.dirname(require.resolve('nodejs-mobile-react-native')),
@@ -312,6 +367,10 @@ function buildGypModule(cwd) {
   }
 }
 
+/**
+ * @param {string} filename
+ * @returns {Promise<void>}
+ */
 async function hackIOSMinVersion(filename) {
   const task1 = await p(exec)(`vtool -show ${filename}`);
   const lines = task1.stdout.split('\n');
@@ -357,6 +416,11 @@ async function hackIOSMinVersion(filename) {
   );
 }
 
+/**
+ * @param {string} cwd
+ * @param {string} dst
+ * @returns {Promise<Array<string>>}
+ */
 async function moveGypOutput(cwd, dst) {
   const src = path.join(cwd, 'build', 'Release');
   const ready = [];
@@ -364,6 +428,7 @@ async function moveGypOutput(cwd, dst) {
     if (filename.endsWith('.node')) {
       const srcFilename = path.resolve(src, filename);
       const dstFilename = path.resolve(dst, filename);
+      // @ts-ignore
       await rimraf(dstFilename);
       // Apply index.node/index hack for iOS, if necessary:
       if (platform === 'ios' && fs.lstatSync(srcFilename).isFile()) {
@@ -382,6 +447,11 @@ async function moveGypOutput(cwd, dst) {
   return ready;
 }
 
+/**
+ *
+ * @param {string} cwd
+ * @returns {import('child_process').ChildProcess}
+ */
 function buildRustModule(cwd) {
   const triple = getRustTriple();
 
@@ -390,7 +460,7 @@ function buildRustModule(cwd) {
     process.exit(1);
   }
 
-  const androidEnvs = {};
+  const androidEnvs = /** @type {Record<string, string>} */ ({});
   if (platform === 'android') {
     if (!process.env.ANDROID_NDK_HOME) {
       console.error('ANDROID_NDK_HOME environment variable should be set');
@@ -459,11 +529,13 @@ function buildRustModule(cwd) {
     fs.copyFileSync(cargoTomlPath, cargoTomlPath + '.bak');
     const cargoTomlStr = fs.readFileSync(cargoTomlPath, 'utf8') + '\n';
     const cargoToml = TOML.parse(cargoTomlStr);
+    // @ts-ignore
     if (cargoToml.package.links) {
       console.error('Cargo.toml file already has a `links` field');
       process.exit(1);
     }
     console.log('Patching Cargo.toml file to have `links = "node"`');
+    // @ts-ignore
     cargoToml.package.links = 'node';
     fs.writeFileSync(cargoTomlPath, TOML.stringify(cargoToml));
 
@@ -507,6 +579,9 @@ function buildRustModule(cwd) {
   });
 }
 
+/**
+ * @param {string} cwd
+ */
 function undoRustPatches(cwd) {
   // Undo Cargo.toml patch
   const cargoTomlPath = path.join(cwd, 'Cargo.toml');
@@ -539,6 +614,11 @@ function undoRustPatches(cwd) {
   }
 }
 
+/**
+ * @param {string} cwd
+ * @param {string} dst
+ * @returns {Promise<Array<string>>}
+ */
 async function moveRustOutput(cwd, dst) {
   let srcIndexNode = path.join(cwd, 'index.node'); // Neon output
   if (!fs.existsSync(srcIndexNode)) {
@@ -546,6 +626,7 @@ async function moveRustOutput(cwd, dst) {
     if (!fs.existsSync(srcIndexNode)) return [];
   }
   const dstIndexNode = path.resolve(dst, 'index.node');
+  // @ts-ignore
   await rimraf(dstIndexNode);
   // Apply index.node/index hack for iOS, if necessary:
   if (platform === 'ios' && fs.lstatSync(srcIndexNode).isFile()) {
@@ -560,9 +641,15 @@ async function moveRustOutput(cwd, dst) {
   return [dstIndexNode.split(cwd + '/')[1]];
 }
 
+/**
+ * @param {AddonType} type
+ * @param {Function} taskFn
+ * @param {string} cwd
+ * @returns {Promise<number>}
+ */
 async function waitForCompilationTask(type, taskFn, cwd) {
   const task = taskFn(cwd);
-  let stderr = [];
+  let stderr = /** @type {Array<string>} */ ([]);
   if (verbose) {
     await Promise.all([
       echoReadable(task.stdout),
@@ -581,7 +668,7 @@ async function waitForCompilationTask(type, taskFn, cwd) {
 
     console.error('Exited with code ' + code);
     for (const line of stderr) console.log(line);
-    return code;
+    return /** @type {number} */ (code);
   }
   return 0;
 }
@@ -590,7 +677,7 @@ async function waitForCompilationTask(type, taskFn, cwd) {
   // Build the module
   const cwd = process.cwd();
   let task;
-  let type = 'unknown';
+  let type = /** @type {AddonType} */ ('unknown');
   if (isGypNodeAddon(cwd)) {
     task = buildGypModule;
     type = 'gyp';
@@ -615,7 +702,7 @@ async function waitForCompilationTask(type, taskFn, cwd) {
   if (code === 0) {
     const prebuildOutputFolder = path.join(cwd, 'prebuilds', target);
     await mkdirp(prebuildOutputFolder);
-    let ready = [];
+    let ready = /** @type {Array<string>} */ ([]);
     if (type === 'gyp') {
       ready = await moveGypOutput(cwd, prebuildOutputFolder);
     } else if (type.startsWith('rust')) {

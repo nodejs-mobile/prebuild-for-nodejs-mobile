@@ -1,0 +1,15 @@
+{
+  "include": ["bin.js"],
+  "exclude": ["node_modules/", "test/"],
+  "compilerOptions": {
+    "checkJs": true,
+    "declaration": false,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["es2022"],
+    "module": "node16",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2021"
+  }
+}
