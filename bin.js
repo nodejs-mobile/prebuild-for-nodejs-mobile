@@ -8,8 +8,87 @@ const {chunksToLinesAsync, chomp} = require('@rauschma/stringio');
 const {spawn, exec} = require('child_process');
 const p = require('util').promisify;
 
+const target = /** @type {Target} */ (process.argv[2]);
+const verbose = process.argv.includes('--verbose');
+const androidSdkVer = process.argv.includes('--sdk34')
+  ? 34
+  : process.argv.includes('--sdk33')
+  ? 33
+  : process.argv.includes('--sdk32')
+  ? 32
+  : process.argv.includes('--sdk31')
+  ? 31
+  : process.argv.includes('--sdk30')
+  ? 30
+  : process.argv.includes('--sdk29')
+  ? 29
+  : process.argv.includes('--sdk28')
+  ? 28
+  : process.argv.includes('--sdk27')
+  ? 27
+  : process.argv.includes('--sdk26')
+  ? 26
+  : process.argv.includes('--sdk25')
+  ? 25
+  : process.argv.includes('--sdk24')
+  ? 24
+  : 24; // TODO make this less ugly :)
+
+const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
+const VALID_TARGETS = /** @type {Array<Target>} */ ([
+  'ios-arm64',
+  'ios-arm64-simulator',
+  'ios-x64',
+  'android-arm',
+  'android-arm64',
+  'android-x64',
+]);
+const listedTargets = VALID_TARGETS.map((t) => `  * ${t}`).join('\n');
+if (!target) {
+  console.error(
+    'ERROR: Must specify a target to prebuild-for-nodejs-mobile' +
+      ', one of these:\n' +
+      listedTargets,
+  );
+  process.exit(1);
+}
+if (!VALID_TARGETS.includes(target)) {
+  console.error(
+    `ERROR: Invalid target "${target}" specified to prebuild-for-nodejs-mobile` +
+      ', must be one of these:\n' +
+      listedTargets,
+  );
+  process.exit(1);
+}
+
+const [platform, arch, simulatorTag] = target.split('-');
+
+const iossim = !!simulatorTag;
+
+if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
+  console.error(
+    'ANDROID_NDK_HOME missing. Please call this tool again, ' +
+      'providing the ANDROID_NDK_HOME env var first',
+  );
+  process.exit(1);
+}
+
 /**
  * @typedef {'gyp' | 'rust-neon' | 'rust-node-bindgen'} AddonType
+ * @typedef {'ios-arm64' |
+ *  'ios-arm64-simulator' |
+ *  'ios-x64' |
+ *  'android-arm' |
+ *  'android-arm64' |
+ *  'android-x64'
+ * } Target
+ * @typedef {'aarch64-apple-ios' |
+ *  'x86_64-apple-ios' |
+ *  'aarch64-apple-ios-sim' |
+ *  'arm-linux-androideabi' |
+ *  'aarch64-linux-android' |
+ *  'x86_64-linux-android'
+ * } RustTriple
  * @typedef {{
  *   scripts?: {
  *     install?: string;
@@ -41,71 +120,6 @@ async function readableToArray(readable) {
     arr.push(chomp(line));
   }
   return arr;
-}
-
-const target = process.argv[2];
-const verbose = process.argv.includes('--verbose');
-const androidSdkVer = process.argv.includes('--sdk34')
-  ? 34
-  : process.argv.includes('--sdk33')
-  ? 33
-  : process.argv.includes('--sdk32')
-  ? 32
-  : process.argv.includes('--sdk31')
-  ? 31
-  : process.argv.includes('--sdk30')
-  ? 30
-  : process.argv.includes('--sdk29')
-  ? 29
-  : process.argv.includes('--sdk28')
-  ? 28
-  : process.argv.includes('--sdk27')
-  ? 27
-  : process.argv.includes('--sdk26')
-  ? 26
-  : process.argv.includes('--sdk25')
-  ? 25
-  : process.argv.includes('--sdk24')
-  ? 24
-  : 24; // TODO make this less ugly :)
-
-const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
-const VALID_TARGETS = [
-  'ios-arm64',
-  'ios-arm64-simulator',
-  'ios-x64',
-  'android-arm',
-  'android-arm64',
-  'android-x64',
-];
-const listedTargets = VALID_TARGETS.map((t) => `  * ${t}`).join('\n');
-if (!target) {
-  console.error(
-    'ERROR: Must specify a target to prebuild-for-nodejs-mobile' +
-      ', one of these:\n' +
-      listedTargets,
-  );
-  process.exit(1);
-}
-if (!VALID_TARGETS.includes(target)) {
-  console.error(
-    `ERROR: Invalid target "${target}" specified to prebuild-for-nodejs-mobile` +
-      ', must be one of these:\n' +
-      listedTargets,
-  );
-  process.exit(1);
-}
-
-const [platform, arch, simulatorTag] = target.split('-');
-
-const iossim = !!simulatorTag;
-
-if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
-  console.error(
-    'ANDROID_NDK_HOME missing. Please call this tool again, ' +
-      'providing the ANDROID_NDK_HOME env var first',
-  );
-  process.exit(1);
 }
 
 /**
@@ -144,20 +158,26 @@ function isGypNodeAddon(cwd) {
 }
 
 /**
- * @returns {string}
+ * @returns {RustTriple}
  */
 function getRustTriple() {
-  return target === 'ios-arm64'
-    ? 'aarch64-apple-ios'
-    : target === 'ios-x64'
-    ? 'x86_64-apple-ios'
-    : target === 'android-arm'
-    ? 'arm-linux-androideabi'
-    : target === 'android-arm64'
-    ? 'aarch64-linux-android'
-    : target === 'android-x64'
-    ? 'x86_64-linux-android'
-    : '';
+  switch (target) {
+    case 'ios-arm64':
+      return 'aarch64-apple-ios';
+    case 'ios-arm64-simulator':
+      return 'aarch64-apple-ios-sim';
+    case 'ios-x64':
+      return 'x86_64-apple-ios';
+    case 'android-arm':
+      return 'arm-linux-androideabi';
+    case 'android-arm64':
+      return 'aarch64-linux-android';
+    case 'android-x64':
+      return 'x86_64-linux-android';
+    default:
+      console.error('Unrecognized target for Rust compilation: ' + target);
+      process.exit(1);
+  }
 }
 
 /**
@@ -454,11 +474,6 @@ async function moveGypOutput(cwd, dst) {
  */
 function buildRustModule(cwd) {
   const triple = getRustTriple();
-
-  if (triple === '') {
-    console.error('Unrecognized target for Rust compilation: ' + target);
-    process.exit(1);
-  }
 
   const androidEnvs = /** @type {Record<string, string>} */ ({});
   if (platform === 'android') {
