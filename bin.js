@@ -10,29 +10,18 @@ const p = require('util').promisify;
 
 const target = /** @type {Target} */ (process.argv[2]);
 const verbose = process.argv.includes('--verbose');
-const androidSdkVer = process.argv.includes('--sdk34')
-  ? 34
-  : process.argv.includes('--sdk33')
-  ? 33
-  : process.argv.includes('--sdk32')
-  ? 32
-  : process.argv.includes('--sdk31')
-  ? 31
-  : process.argv.includes('--sdk30')
-  ? 30
-  : process.argv.includes('--sdk29')
-  ? 29
-  : process.argv.includes('--sdk28')
-  ? 28
-  : process.argv.includes('--sdk27')
-  ? 27
-  : process.argv.includes('--sdk26')
-  ? 26
-  : process.argv.includes('--sdk25')
-  ? 25
-  : process.argv.includes('--sdk24')
-  ? 24
-  : 24; // TODO make this less ugly :)
+const androidSdkVer = process.argv
+  .filter((arg) => arg.startsWith('--sdk'))
+  .map((arg) => parseInt(arg.slice(5)))
+  .find((arg) => !isNaN(arg)) ?? 24;
+
+if (androidSdkVer < 24) {
+  console.error(
+    'ERROR: Invalid Android SDK version specified to prebuild-for-nodejs-mobile' +
+      ', must be >= 24',
+  );
+  process.exit(1);
+}
 
 const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
 const VALID_TARGETS = /** @type {Array<Target>} */ ([
