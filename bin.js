@@ -379,11 +379,12 @@ function buildGypModule(cwd) {
     ...process.env,
   };
 
+  const VERBOSE = '--loglevel=verbose';
   const patchedInstallScript = patchPackageJSONNodeGypBuild(cwd);
   if (patchedInstallScript) {
-    return spawn('npm', ['run', 'install'], {cwd, env});
+    return spawn('npm', ['run', 'install', VERBOSE], {cwd, env});
   } else {
-    return spawn('node', [mobileGyp, 'rebuild'], {cwd, env});
+    return spawn('node', [mobileGyp, 'rebuild', VERBOSE], {cwd, env});
   }
 }
 
