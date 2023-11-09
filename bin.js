@@ -27,7 +27,7 @@ const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
 const VALID_TARGETS = /** @type {Array<Target>} */ ([
   'ios-arm64',
   'ios-arm64-simulator',
-  'ios-x64',
+  'ios-x64-simulator',
   'android-arm',
   'android-arm64',
   'android-x64',
@@ -73,7 +73,7 @@ if (platform === 'android' && !process.env.ANDROID_NDK_HOME) {
  * @typedef {'gyp' | 'rust-neon' | 'rust-node-bindgen'} AddonType
  * @typedef {'ios-arm64' |
  *  'ios-arm64-simulator' |
- *  'ios-x64' |
+ *  'ios-x64-simulator' |
  *  'android-arm' |
  *  'android-arm64' |
  *  'android-x64'
@@ -162,7 +162,7 @@ function getRustTriple() {
       return 'aarch64-apple-ios';
     case 'ios-arm64-simulator':
       return 'aarch64-apple-ios-sim';
-    case 'ios-x64':
+    case 'ios-x64-simulator':
       return 'x86_64-apple-ios';
     case 'android-arm':
       return 'arm-linux-androideabi';
