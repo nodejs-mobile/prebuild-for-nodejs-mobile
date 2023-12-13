@@ -10,6 +10,7 @@ const p = require('util').promisify;
 
 const MIN_ANDROID_SDK_VERSION = 24;
 const VALID_MIN_IOS_VERSION = '13.0'; // This is hard-coded in nodejs-mobile
+const APPLE_LD_VERSION = '857.1'; // Matching Xcode 14.3.2
 const VALID_TARGETS = /** @type {Array<Target>} */ ([
   'ios-arm64',
   'ios-arm64-simulator',
@@ -421,10 +422,15 @@ async function hackIOSMinVersion(filename) {
   await p(exec)(
     [
       'vtool',
-      '-set-version-min',
+      '-set-build-version',
       'ios',
       VALID_MIN_IOS_VERSION,
-      sdkVersion, // preserve SDK version as it was
+      sdkVersion,
+      '-set-build-tool',
+      'ios',
+      'ld',
+      APPLE_LD_VERSION,
+      '-replace',
       `-output ${filename}`,
       filename,
     ].join(' '),
