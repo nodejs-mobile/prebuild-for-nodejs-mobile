@@ -423,11 +423,11 @@ async function hackIOSMinVersion(filename) {
     [
       'vtool',
       '-set-build-version',
-      'ios',
+      iossim ? 'iossim' : 'ios',
       VALID_MIN_IOS_VERSION,
       sdkVersion,
       '-set-build-tool',
-      'ios',
+      iossim ? 'iossim' : 'ios',
       'ld',
       APPLE_LD_VERSION,
       '-replace',
